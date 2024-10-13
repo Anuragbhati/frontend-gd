@@ -31,10 +31,6 @@ const ItemContent = styled.div`
   }
 `;
 
-const ItemIcon = styled.span`
-  margin-right: 5px;
-`;
-
 const ItemName = styled.span`
   cursor: pointer;
   margin-left: 5px;
@@ -83,10 +79,12 @@ const TreeView = ({ locations, items, onSelectItem, onAddItem, onDelete }) => {
             onSelectItem(null, location);
           }}
         >
-          <ItemIcon>{isOpen ? <FaChevronDown /> : <FaChevronRight />}</ItemIcon>
-          <ItemIcon>
+          <span style={{ marginRight: "5px" }}>
+            {isOpen ? <FaChevronDown /> : <FaChevronRight />}
+          </span>
+          <span style={{ marginRight: "5px" }}>
             {location.is_godown ? <FaWarehouse /> : <FaBoxOpen />}
-          </ItemIcon>
+          </span>
           <ItemName>{location.name}</ItemName>
           <DeleteButton
             onClick={(e) => {

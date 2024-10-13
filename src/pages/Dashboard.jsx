@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import styled from "styled-components";
+import styled, { keyframes } from "styled-components";
 import TreeView from "../components/TreeView";
 import {
   getLocations,
@@ -9,6 +9,8 @@ import {
 import { getItems, createItem, deleteItem } from "../services/itemService";
 import Header from "../components/Header";
 import { FaPlus, FaWarehouse, FaBoxOpen } from "react-icons/fa";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 const DashboardContainer = styled.div`
   display: flex;
@@ -59,18 +61,6 @@ const ItemDetails = styled.div`
   border-radius: 8px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   margin-top: 2rem;
-`;
-
-const DashboardTitle = styled.h1`
-  font-size: 1.8rem;
-  margin-bottom: 1rem;
-  color: #2c3e50;
-  font-weight: 700;
-
-  @media (min-width: 768px) {
-    font-size: 2.5rem;
-    margin-bottom: 1.5rem;
-  }
 `;
 
 const CreateLocationForm = styled.form`
@@ -200,6 +190,54 @@ const SubLocationItem = styled.li`
   margin: 10px 0;
 `;
 
+const FilterContainer = styled.div`
+  margin-bottom: 1rem;
+  display: flex;
+  gap: 1rem;
+`;
+
+const FilterInput = styled.input`
+  padding: 0.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  width: 100%;
+`;
+
+const shimmer = keyframes`
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: 200px 0;
+  }
+`;
+
+const Skeleton = styled.div`
+  background: linear-gradient(90deg, #f0f4f8 25%, #e0e0e0 50%, #f0f4f8 75%);
+  background-size: 200% 100%;
+  animation: ${shimmer} 1.5s infinite;
+  border-radius: 8px;
+  margin: 0.5rem 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+`;
+
+const SidebarSkeleton = styled(Skeleton)`
+  height: 100%;
+  width: 100%;
+`;
+
+const MainContentSkeleton = styled(Skeleton)`
+  height: calc(100vh - 100px);
+  width: 100%;
+`;
+
+const ItemSkeleton = styled(Skeleton)`
+  height: 40px;
+  width: 100%;
+  margin: 0.5rem 0;
+  border-radius: 4px;
+`;
+
 function Dashboard() {
   const [locations, setLocations] = useState([]);
   const [items, setItems] = useState([]);
@@ -222,20 +260,47 @@ function Dashboard() {
   const [showAddItemForm, setShowAddItemForm] = useState(false);
   const [addItemLocationId, setAddItemLocationId] = useState(null);
 
+  const [filterCategory, setFilterCategory] = useState("");
+  const [filterBrand, setFilterBrand] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+
+  const [isFetching, setIsFetching] = useState(false);
+
   useEffect(() => {
-    setIsLoading(true);
-    Promise.all([getLocations(), getItems()])
-      .then(([locationsData, itemsData]) => {
-        setLocations(locationsData);
-        setItems(itemsData);
+    const fetchData = async () => {
+      setIsLoading(true);
+      setIsFetching(true);
+      try {
+        const locationsResponse = await getLocations();
+        const itemsResponse = await getItems({
+          category: filterCategory,
+          brand: filterBrand,
+          status: filterStatus,
+        });
+        setLocations(locationsResponse);
+        setItems(itemsResponse);
+      } catch (err) {
+        toast.error(
+          err.message ?? "Failed to fetch data. Please try again later."
+        );
+      } finally {
         setIsLoading(false);
-      })
-      .catch((err) => {
-        console.error(err);
-        setError("Failed to fetch data. Please try again later.");
-        setIsLoading(false);
-      });
-  }, []);
+        setIsFetching(false);
+      }
+    };
+
+    const debounceTimeout = setTimeout(() => {
+      fetchData();
+    }, 300);
+
+    return () => clearTimeout(debounceTimeout);
+  }, [filterCategory, filterBrand, filterStatus]);
+
+  const clearFilters = () => {
+    setFilterCategory("");
+    setFilterBrand("");
+    setFilterStatus("");
+  };
 
   const handleCreateLocation = async (e) => {
     e.preventDefault();
@@ -253,8 +318,8 @@ function Dashboard() {
     try {
       const createdLocation = await createLocation(newLocation);
       setLocations([...locations, createdLocation]);
+      toast.success("Location created successfully!");
 
-      // If showItemForm is true and it's not a godown, create an item
       if (showItemForm && !isGodown) {
         const newItem = {
           name: newItemName,
@@ -272,17 +337,17 @@ function Dashboard() {
 
         const createdItem = await createItem(newItem);
         setItems([...items, createdItem]);
+        toast.success("Item created successfully!");
       }
 
-      // Reset form fields
       setNewLocationName("");
       setIsGodown(true);
       setSelectedParentId("");
       resetItemForm();
-      setError(null);
     } catch (err) {
-      console.error(err);
-      setError("Failed to create location or item. Please try again.");
+      toast.error(
+        err.message ?? "Failed to create location or item. Please try again."
+      );
     }
   };
 
@@ -291,7 +356,7 @@ function Dashboard() {
     if (location && !location.is_godown) {
       setShowAddItemForm(true);
       setAddItemLocationId(locationId);
-      setNewItemStatus("in_stock"); // Set default status
+      setNewItemStatus("in_stock");
     } else {
       setError("Items can only be added to sub-locations.");
     }
@@ -308,9 +373,21 @@ function Dashboard() {
     )
       return;
 
+    if (newItemStatus === "out_of_stock") {
+      const confirmOutOfStock = window.confirm(
+        "The item is set to out of stock. Do you want to proceed with quantity set to 0?"
+      );
+      if (!confirmOutOfStock) {
+        return;
+      }
+    }
+
+    const quantity =
+      newItemStatus === "out_of_stock" ? "0" : parseInt(newItemQuantity);
+
     const newItem = {
       name: newItemName,
-      quantity: parseInt(newItemQuantity),
+      quantity: quantity,
       category: newItemCategory,
       status: newItemStatus,
       sub_godown_id: addItemLocationId,
@@ -325,9 +402,9 @@ function Dashboard() {
       setItems([...items, createdItem]);
       resetItemForm();
       setShowAddItemForm(false);
+      toast.success("Item created successfully!");
     } catch (err) {
-      console.error(err);
-      setError("Failed to create item. Please try again.");
+      toast.error(err.message ?? "Failed to create item. Please try again.");
     }
   };
 
@@ -394,15 +471,35 @@ function Dashboard() {
 
     return (
       <ItemList>
-        {locationItems.map((item) => (
-          <ItemListItem key={item._id}>{item.name}</ItemListItem>
-        ))}
+        {locationItems.length === 0 ? (
+          <>
+            <ItemSkeleton />
+            <ItemSkeleton />
+            <ItemSkeleton />
+          </>
+        ) : (
+          locationItems.map((item) => (
+            <ItemListItem key={item._id}>{item.name}</ItemListItem>
+          ))
+        )}
       </ItemList>
     );
   };
 
   if (isLoading) {
-    return <div>Loading...</div>;
+    return (
+      <DashboardContainer>
+        <Header />
+        <ContentContainer>
+          <Sidebar>
+            <SidebarSkeleton />
+          </Sidebar>
+          <MainContent>
+            <MainContentSkeleton />
+          </MainContent>
+        </ContentContainer>
+      </DashboardContainer>
+    );
   }
 
   if (error) {
@@ -423,7 +520,28 @@ function Dashboard() {
           />
         </Sidebar>
         <MainContent>
-          <DashboardTitle>Godown Management</DashboardTitle>
+          <FilterContainer>
+            <FilterInput
+              type="text"
+              placeholder="Filter by Category"
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+            />
+            <FilterInput
+              type="text"
+              placeholder="Filter by Brand"
+              value={filterBrand}
+              onChange={(e) => setFilterBrand(e.target.value)}
+            />
+            <FilterInput
+              type="text"
+              placeholder="Filter by Status"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+            />
+            <Button onClick={clearFilters}>Clear Filters</Button>
+          </FilterContainer>
+          {isFetching && <div>Loading filters...</div>}{" "}
           {showAddItemForm ? (
             <CreateLocationForm onSubmit={handleCreateItem}>
               <FormTitle>Add New Item</FormTitle>
@@ -662,6 +780,7 @@ function Dashboard() {
           )}
         </MainContent>
       </ContentContainer>
+      <ToastContainer />
     </DashboardContainer>
   );
 }

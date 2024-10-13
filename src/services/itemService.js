@@ -20,9 +20,9 @@ export const createItem = async (item) => {
   }
 };
 
-export const getItems = async () => {
+export const getItems = async (filters = {}) => {
   try {
-    const response = await api.get("/items");
+    const response = await api.get("/items", { params: filters });
     return response.data;
   } catch (error) {
     console.error("Error fetching items:", error);

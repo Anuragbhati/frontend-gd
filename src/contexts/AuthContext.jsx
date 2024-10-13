@@ -8,7 +8,6 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // New function to handle setting user data
   const setUserData = async () => {
     try {
       const userData = await getProfile();
@@ -36,7 +35,6 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem("token", data.token);
       await setUserData();
     } catch (error) {
-      console.error("Login error:", error);
       setLoading(false);
       throw error;
     }
@@ -49,11 +47,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logoutUser = () => {
-    // logout();
     localStorage.removeItem("token");
     setUser(null);
   };
-  console.log(user, "datat");
+
   return (
     <AuthContext.Provider
       value={{ user, loginUser, registerUser, logoutUser, loading }}

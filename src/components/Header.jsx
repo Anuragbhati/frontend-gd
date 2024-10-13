@@ -44,7 +44,7 @@ const LogoutButton = styled.button`
 
 const Header = () => {
   const { user, logoutUser } = useContext(AuthContext);
-  console.log(user, "user");
+
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const navigate = useNavigate();
 
